@@ -1,6 +1,6 @@
 ---
 title: "NYPD Shooting Incident Data Report"
-author: "T.Umeno"
+author: "TU"
 date: "12/28/2021"
 output:
   html_document: default
