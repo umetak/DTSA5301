@@ -1,0 +1,133 @@
+---
+title: "NYPD Shooting Incident Data Report"
+author: "T.Umeno"
+date: "12/28/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## Description of the data
+
+This data is the list of every shooting incident that occurred in NYC going back to 2006 through the end of the previous calendar year. The original data can be found at <https://catalog.data.gov/dataset/nypd-shooting-incident-data-historic>.
+
+The direct link of csv data is below: 
+
+```{r get_NYPD_data}
+data_url <-"https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv"
+
+```
+
+
+R packages used in this analysis are below: 
+```{r setup}
+library(tidyverse)
+library(ggfortify)
+library(ggplot2)
+install.packages("zoo", dependencies = TRUE)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Summary of the data 
+
+This data has 19 columns and 23.6k rows, including features like "Exact date of the shooting incident", "Location of the shooting incident", "Perpetrator’s sex description", "Victim’s race description", and so on.
+
+```{r import__data, message=FALSE}
+Incident_data <- read_csv(data_url)
+
+```
+```{r incident_data}
+summary(Incident_data)
+```
+
+### Transform the date type
+
+OCCUR_DATE is transformed to the date type which will be used for a time series graph later.
+
+```{r date_transform, message=FALSE}
+
+Incident_data$year_month <- strftime(as.Date(Incident_data$OCCUR_DATE, "%m/%d/%Y"), "%Y-%m")
+
+
+```
+
+Some columns are omitted for this analysis.
+
+```{r tidyup, message=FALSE}
+mydata = select(Incident_data, -c(X_COORD_CD, Y_COORD_CD, Lon_Lat, Latitude,  Longitude, LOCATION_DESC, OCCUR_DATE, PRECINCT, JURISDICTION_CODE, STATISTICAL_MURDER_FLAG))
+summary(mydata)
+```
+
+
+## Visualizations and analysis
+
+### The number of incidents in time series
+The line graph below indicates the number of incidents through 2006-2020. We can see a seasonable periodic trend in this graph. Most surprisingly, there is a huge spike in the middle of 2020. It is considered that the COVID pandemic affects a lot on numbers of shooting incidents in NYC.
+
+```{r vis}
+
+trend_data <- mydata %>%
+  group_by(year_month) %>%
+  summarize(n=n()) %>%
+  ungroup()
+
+data_ts<-ts(trend_data$n,frequency=12,start=c(2006,1))
+autoplot(data_ts, ts.colour = 'blue', xlab='Month', ylab='number')
+
+```
+
+### The number of victims in each age group
+Next, the bar graph below shows that the number of victims in each age group between 2006 and 2020.
+
+```{r bar1}
+
+age_data <- mydata %>%
+  group_by(VIC_AGE_GROUP) %>%
+  summarize(n=n()) %>%
+  ungroup()
+
+ggplot(age_data, aes(x=VIC_AGE_GROUP, y=n, fill=VIC_AGE_GROUP))  + geom_bar(stat = "identity", position = "dodge") 
+
+
+```
+
+### The number of victims in each racial group
+This bar graph shows that the number of victims in each racial group between 2006 and 2020.
+
+
+```{r bar2}
+
+race_data <- mydata %>%
+  group_by(VIC_RACE) %>%
+  summarize(n=n()) %>%
+  ungroup()
+
+ggplot(race_data, aes(x=VIC_RACE, y=n, fill=VIC_RACE))  + geom_bar(stat = "identity", position = "dodge") 
+
+
+```
+
+
+
+
+## Bias identification
+
+It is easily observed that many crimes were committed by specific age and racial group, but it could be a bias. If we only consider these two bar graphs, it results that we only see the data from just a few aspects. We should keep in mind that these graphs don't include other information such as dates and locations which are also important data to analyze. When we analyze a data which has many features, it is important to visualize it from  multiple views and consider many hypothesis.
+
+
+## Modeling data
+
+The trend graph below is a regression line calculated by a smooth method. X-axis indicates time series through 2006-2020 and Y-axis does the number of incidents, respectively. It shows a trend of decrease from 2006 to 2019, but this trend suddenly changed at the certain point in the beginning of 2020.
+
+```{r my_model, message=FALSE}
+trend_data_2 <- trend_data %>%
+  mutate(num = row_number()) 
+
+g1 <- ggplot(data = trend_data_2, aes(x = num, y = n))+
+	geom_point(size = 1)+
+  stat_smooth(method = "gam", se = TRUE)+
+  scale_x_discrete("year_month")
+plot(g1)
+
+
+```
